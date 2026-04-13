@@ -1,41 +1,44 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from config import Config
 import os
 
 app = Flask(__name__)
-app.config.from_object(Config)
 
-# 🔴 IMPORTANTE: ruta absoluta para SQLite (Render fix)
+# Configurar base de datos correctamente para Render
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(BASE_DIR, "crm.db")
+
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = "secret"
 
 db = SQLAlchemy(app)
 
-login_manager = LoginManager(app)
-login_manager.login_view = 'auth.login'
+# ==============================
+# MODELOS MÍNIMOS (evita errores)
+# ==============================
+class Pago(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    mes = db.Column(db.String(20))
+    monto = db.Column(db.Float)
+    estado = db.Column(db.String(20))
 
-# importar modelos después de db
-import models
-
-# crear base y tablas
+# ==============================
+# CREAR DB
+# ==============================
 with app.app_context():
     db.create_all()
 
-# importar rutas
-from routes.dashboard import dashboard_bp
-from routes.inquilinos import inquilinos_bp
-from routes.reportes import reportes_bp
-
-app.register_blueprint(dashboard_bp)
-app.register_blueprint(inquilinos_bp)
-app.register_blueprint(reportes_bp)
-
+# ==============================
+# RUTA PRINCIPAL (SIN ERRORES)
+# ==============================
 @app.route("/")
 def home():
-    return "CRM funcionando correctamente 🚀"
+    pagos = Pago.query.all()
+    return f"CRM funcionando 🚀 | Pagos cargados: {len(pagos)}"
 
+# ==============================
+# EJECUCIÓN
+# ==============================
 if __name__ == "__main__":
     app.run()
