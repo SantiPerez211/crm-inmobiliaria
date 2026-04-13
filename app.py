@@ -1,21 +1,19 @@
-from flask import Flask
+from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 import os
 
 app = Flask(__name__)
 
-# Configurar base de datos correctamente para Render
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(BASE_DIR, "crm.db")
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = "secret"
 
 db = SQLAlchemy(app)
 
 # ==============================
-# MODELOS MÍNIMOS (evita errores)
+# MODELOS
 # ==============================
 class Pago(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -30,12 +28,19 @@ with app.app_context():
     db.create_all()
 
 # ==============================
-# RUTA PRINCIPAL (SIN ERRORES)
+# RUTAS
 # ==============================
 @app.route("/")
-def home():
+def dashboard():
     pagos = Pago.query.all()
-    return f"CRM funcionando 🚀 | Pagos cargados: {len(pagos)}"
+    total = sum([p.monto for p in pagos if p.estado == "pagado"])
+    deuda = len([p for p in pagos if p.estado == "pendiente"])
+
+    return f"""
+    <h1>Dashboard CRM</h1>
+    <p>Total cobrado: ${total}</p>
+    <p>Deudas: {deuda}</p>
+    """
 
 # ==============================
 # EJECUCIÓN
