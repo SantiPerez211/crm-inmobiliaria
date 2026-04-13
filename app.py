@@ -1,6 +1,7 @@
 from flask import Flask, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -24,7 +25,7 @@ class Pago(db.Model):
     inquilino_id = db.Column(db.Integer)
     mes = db.Column(db.String(20))
     monto = db.Column(db.Float)
-    estado = db.Column(db.String(20))
+    estado = db.Column(db.String(20))  # pagado / pendiente
 
 # ==============================
 # CREAR DB
@@ -33,10 +34,34 @@ with app.app_context():
     db.create_all()
 
 # ==============================
+# GENERAR DEUDAS AUTOMÁTICAS
+# ==============================
+def generar_deudas():
+    hoy = datetime.now()
+    mes_actual = hoy.strftime("%Y-%m")
+
+    inquilinos = Inquilino.query.all()
+
+    for i in inquilinos:
+        existe = Pago.query.filter_by(inquilino_id=i.id, mes=mes_actual).first()
+        if not existe:
+            deuda = Pago(
+                inquilino_id=i.id,
+                mes=mes_actual,
+                monto=100000,  # después lo hacemos variable
+                estado="pendiente"
+            )
+            db.session.add(deuda)
+
+    db.session.commit()
+
+# ==============================
 # DASHBOARD
 # ==============================
 @app.route("/")
 def dashboard():
+    generar_deudas()
+
     pagos = Pago.query.all()
     total = sum([p.monto for p in pagos if p.estado == "pagado"])
     deuda = len([p for p in pagos if p.estado == "pendiente"])
@@ -49,7 +74,7 @@ def dashboard():
     """
 
 # ==============================
-# INQUILINOS (PRIMERA PESTAÑA)
+# INQUILINOS
 # ==============================
 @app.route("/inquilinos", methods=["GET", "POST"])
 def inquilinos():
@@ -72,10 +97,17 @@ def inquilinos():
     """
 
     for i in lista:
+        pagos = Pago.query.filter_by(inquilino_id=i.id).all()
+
+        html += f"<h3>{i.nombre}</h3>"
+
+        for p in pagos:
+            color = "green" if p.estado == "pagado" else "red"
+            html += f"<p style='color:{color}'>{p.mes} - ${p.monto} - {p.estado}</p>"
+
         html += f"""
-        <p>{i.nombre}</p>
         <form action='/pagar/{i.id}' method='POST'>
-            <input name='mes' placeholder='Mes'>
+            <input name='mes' placeholder='Mes (YYYY-MM)'>
             <input name='monto' placeholder='Monto'>
             <button>Pagar</button>
         </form>
@@ -86,17 +118,25 @@ def inquilinos():
     return html
 
 # ==============================
-# REGISTRAR PAGO
+# PAGAR
 # ==============================
 @app.route("/pagar/<int:id>", methods=["POST"])
 def pagar(id):
-    pago = Pago(
-        inquilino_id=id,
-        mes=request.form["mes"],
-        monto=float(request.form["monto"]),
-        estado="pagado"
-    )
-    db.session.add(pago)
+    mes = request.form["mes"]
+
+    pago = Pago.query.filter_by(inquilino_id=id, mes=mes).first()
+
+    if pago:
+        pago.estado = "pagado"
+    else:
+        pago = Pago(
+            inquilino_id=id,
+            mes=mes,
+            monto=float(request.form["monto"]),
+            estado="pagado"
+        )
+        db.session.add(pago)
+
     db.session.commit()
     return redirect("/inquilinos")
 
